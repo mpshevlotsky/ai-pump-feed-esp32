@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Pump Bridge</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, sans-serif;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 12px;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    h1 {
+      font-size: 1.3em;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    h2 {
+      font-size: 1em;
+      margin: 0 0 4px;
+      color: #555;
+    }
+
+    .desc {
+      font-size: 0.8em;
+      color: #999;
+      margin: 8px 0;
+      line-height: 1.3;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      font-size: 0.9em;
+    }
+
+    .row .label {
+      color: #888;
+    }
+
+    .row .value {
+      font-weight: 600;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.95em;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .btn-primary:disabled {
+      background: #93c5fd;
+    }
+
+    .btn-feed {
+      background: #dc2626;
+      color: #fff;
+      font-size: 1.1em;
+      padding: 14px;
+    }
+
+    .btn-feed:disabled {
+      background: #d4d4d4;
+      color: #999;
+    }
+
+    .btn-danger {
+      background: #991b1b;
+      color: #fff;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .btn-loading {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .btn-secondary {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    input {
+      width: 100%;
+      padding: 7px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin: 3px 0 6px;
+      font-size: 0.9em;
+    }
+
+    label {
+      font-size: 0.85em;
+      color: #666;
+    }
+
+    .device-list {
+      list-style: none;
+    }
+
+    .device-list li {
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+
+    .device-list li:hover {
+      background: #f0f0f0;
+    }
+
+    .device-list li.selected {
+      background: #dbeafe;
+    }
+
+    .message {
+      padding: 6px 8px;
+      border-radius: 4px;
+      margin: 6px 0;
+      font-size: 0.85em;
+      display: none;
+    }
+
+    .message-ok {
+      background: #dcfce7;
+      color: #166534;
+      display: block;
+    }
+
+    .message-error {
+      background: #fee2e2;
+      color: #991b1b;
+      display: block;
+      cursor: pointer;
+    }
+
+    .message-error::after {
+      content: ' \00d7';
+      font-weight: 700;
+      float: right;
+    }
+
+    .log-panel {
+      background: #1a1a2e;
+      color: #0f0;
+      border-radius: 4px;
+      padding: 6px;
+      font-family: monospace;
+      font-size: 0.75em;
+      height: 100px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Collapsible sections */
+    details.card > summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    details.card > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.card > summary::marker {
+      content: '';
+    }
+
+    details.card > summary h2 {
+      margin: 0;
+    }
+
+    details.card > summary::after {
+      content: '\25b8';
+      font-size: 0.85em;
+      color: #999;
+    }
+
+    details.card[open] > summary::after {
+      content: '\25be';
+    }
+
+    .offline-banner {
+      display: none;
+      background: #fef3c7;
+      color: #92400e;
+      text-align: center;
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+
+    .offline-banner.visible {
+      display: block;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 8px;
+      font-size: 0.75em;
+    }
+
+    .footer a {
+      color: #999;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      color: #666;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Pump Bridge</h1>
+  <div class="offline-banner" id="offline-banner">Device unreachable — retrying...</div>
+
+  <!-- Status (hidden until pump is selected) -->
+  <div class="card" id="status-section" style="display: none">
+    <h2>Status</h2>
+    <div class="row"><span class="label">WiFi</span><span class="value" id="wifi-state">--</span></div>
+    <div class="row"><span class="label">IP</span><span class="value" id="wifi-ip">--</span></div>
+    <div class="row"><span class="label">SSID</span><span class="value" id="wifi-ssid">--</span></div>
+    <div class="row"><span class="label">Pump</span><span class="value" id="ble-target">Not set</span></div>
+    <div class="row"><span class="label">Feed Mode</span><span class="value" id="feed-duration">--</span></div>
+    <div class="row"><span class="label">MQTT</span><span class="value" id="mqtt-state">--</span></div>
+  </div>
+
+  <!-- Actions (hidden until pump is selected) -->
+  <div class="card" id="actions-section" style="display: none">
+    <h2>Actions</h2>
+    <p class="desc">Send commands to the connected pump via BLE.</p>
+    <div id="feed-message" class="message"></div>
+    <button class="btn btn-feed" id="feed-btn" onclick="activateFeedMode()">
+      Activate Feed Mode
+    </button>
+  </div>
+
+  <!-- Pumps (always visible, collapsed when pump is selected) -->
+  <details class="card" id="scanner-section" open>
+    <summary><h2>Pumps</h2></summary>
+    <p class="desc">Connect to nearby AI pumps. If all pumps share the same mesh network, one will be selected automatically.</p>
+    <div id="scanner-message" class="message"></div>
+    <button class="btn btn-primary" id="auto-connect-btn" onclick="autoConnect()">
+      Connect to pumps
+    </button>
+    <ul class="device-list" id="device-list"></ul>
+    <button class="btn btn-secondary" id="connect-btn" onclick="setTarget()"
+            style="display: none; margin-top: 6px">
+      Select Pump
+    </button>
+    <div id="sync-controls" style="display: none; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px">
+      <p class="desc">Fetch scenes settings from all pumps in your mesh network.
+        Run this after changing settings in the myAI / Mobius app.</p>
+      <div id="sync-message" class="message"></div>
+      <button class="btn btn-primary" id="sync-btn" onclick="syncSettings()">
+        Sync Settings
+      </button>
+    </div>
+  </details>
+
+  <!-- WiFi Settings (hidden until pump is selected) -->
+  <details class="card" id="wifi-section" style="display: none" open>
+    <summary><h2>WiFi Settings</h2></summary>
+    <p class="desc">Configure WiFi network for internet connectivity and MQTT.</p>
+    <label>SSID</label>
+    <input id="wifi-ssid-input" placeholder="Network name">
+    <label>Password</label>
+    <input type="password" id="wifi-pass-input" placeholder="Password">
+    <div id="wifi-message" class="message"></div>
+    <button class="btn btn-primary" onclick="saveWifi()">Save &amp; Connect</button>
+  </details>
+
+  <!-- MQTT Settings (hidden until pump is selected) -->
+  <details class="card" id="mqtt-section" style="display: none" open>
+    <summary><h2>MQTT Settings</h2></summary>
+    <p class="desc">Configure MQTT broker for remote control via Home Assistant or other automation platforms.</p>
+    <label>Broker</label>
+    <input id="mqtt-broker-input" placeholder="192.168.1.x">
+    <label>Port</label>
+    <input type="number" id="mqtt-port-input" value="1883">
+    <label>User</label>
+    <input id="mqtt-user-input" placeholder="(optional)">
+    <label>Password</label>
+    <input type="password" id="mqtt-pass-input" placeholder="(optional)">
+    <div id="mqtt-message" class="message"></div>
+    <button class="btn btn-primary" onclick="saveMqtt()">Save MQTT &amp; Connect</button>
+  </details>
+
+  <!-- Factory Reset (hidden until pump is selected) -->
+  <details class="card" id="reset-section" style="display: none">
+    <summary><h2>Factory Reset</h2></summary>
+    <p class="desc">Erase all settings (WiFi, MQTT, pump) and reboot to defaults.</p>
+    <div id="reset-message" class="message"></div>
+    <button class="btn btn-danger" onclick="factoryReset()">Factory Reset</button>
+  </details>
+
+  <!-- Log -->
+  <details class="card" id="log-section">
+    <summary><h2>Log</h2></summary>
+    <p class="desc">Device activity log for debugging and monitoring.</p>
+    <div class="log-panel" id="log-panel"></div>
+  </details>
+
+  <div class="footer">
+    <a href="/openapi.yaml" download>Download API Specification (OpenAPI)</a>
+  </div>
+
+  <script>
+    const RESET_TOKEN = '__RESET_TOKEN__';
+    let selectedAddress = null;
+    let selectedAddrType = 1;
+    let feedInProgress = false;
+    let feedCountdownEnd = 0;
+    let feedCountdownTimer = null;
+    let feedConfiguredDur = 0;
+    let syncInProgress = false;
+    let autoConnectInProgress = false;
+    let scannedDevices = [];
+    let lastBleBusy = null;
+    let lastMesh = null;
+    let lastFreeMem = null;
+    let isFirstLoad = true;
+    let lastHasPump = false;
+    let redirectShown = false;
+    let pollFailCount = 0;
+    const POLL_FAIL_THRESHOLD = 3;
+    const SCAN_POLL_MS = 2000;
+
+    const AUTO_CONNECT_TIMEOUT_MS = 120000;
+    const STATUS_POLL_MS = 10000;
+    const MESSAGE_TIMEOUT_MS = 5000;
+
+    const WIFI_STATES = {
+      connected:    { label: 'Connected',     color: '#16a34a' },
+      connecting:   { label: 'Connecting...', color: '#d97706' },
+      ap_active:    { label: 'Access Point',  color: '#2563eb' },
+      disconnected: { label: 'Disconnected',  color: '#888' },
+      error:        { label: 'Error',         color: '#dc2626' }
+    };
+    const MQTT_STATES = {
+      connected:    { label: 'Connected',     color: '#16a34a' },
+      connecting:   { label: 'Connecting...', color: '#d97706' },
+      disconnected: { label: 'Disconnected',  color: '#888' },
+      error:        { label: 'Error',         color: '#dc2626' }
+    };
+
+    /* ------------------------------------------------------------------ */
+    /* Helpers                                                             */
+    /* ------------------------------------------------------------------ */
+
+    function log(text) {
+      const el = document.getElementById('log-panel');
+      const now = new Date();
+      const hh = ('0' + now.getHours()).slice(-2);
+      const mm = ('0' + now.getMinutes()).slice(-2);
+      const ss = ('0' + now.getSeconds()).slice(-2);
+      el.textContent += hh + ':' + mm + ':' + ss + ' ' + text + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function showMessage(elementId, success, text) {
+      const el = document.getElementById(elementId);
+      el.onclick = null;
+      el.textContent = text;
+      el.className = 'message ' + (success ? 'message-ok' : 'message-error');
+      if (success) {
+        setTimeout(function () {
+          el.className = 'message';
+        }, MESSAGE_TIMEOUT_MS);
+      } else {
+        el.onclick = function () {
+          el.className = 'message';
+          el.onclick = null;
+        };
+      }
+    }
+
+    function apiCall(method, url, body, callback) {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, url);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onload = function () {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 400) {
+            callback(new Error(data.error || 'HTTP ' + xhr.status));
+          } else {
+            callback(null, data);
+          }
+        } catch (err) {
+          callback(err);
+        }
+      };
+      xhr.onerror = function () {
+        callback(new Error('Network error'));
+      };
+      xhr.send(body ? JSON.stringify(body) : null);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Feed Mode display                                                   */
+    /* ------------------------------------------------------------------ */
+
+    function formatDuration(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return m + 'm ' + s + 's';
+    }
+
+    function renderFeedDuration() {
+      const el = document.getElementById('feed-duration');
+      if (feedConfiguredDur > 0) {
+        el.textContent = formatDuration(feedConfiguredDur);
+        el.style.color = '';
+      } else {
+        el.textContent = 'Inactive';
+        el.style.color = '#888';
+      }
+    }
+
+    function startFeedCountdown() {
+      if (feedCountdownTimer) {
+        clearInterval(feedCountdownTimer);
+      }
+      feedCountdownEnd = Date.now() + feedConfiguredDur * 1000;
+      tickFeedCountdown();
+      feedCountdownTimer = setInterval(tickFeedCountdown, 1000);
+    }
+
+    function tickFeedCountdown() {
+      const remaining = Math.max(0,
+        Math.ceil((feedCountdownEnd - Date.now()) / 1000));
+      const el = document.getElementById('feed-duration');
+      if (remaining > 0) {
+        el.textContent = formatDuration(remaining) + ' remaining';
+        el.style.color = '#dc2626';
+      } else {
+        clearInterval(feedCountdownTimer);
+        feedCountdownTimer = null;
+        renderFeedDuration();
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Status polling                                                      */
+    /* ------------------------------------------------------------------ */
+
+    function refreshStatus() {
+      apiCall('GET', '/api/status', null, function (err, data) {
+        if (err) {
+          pollFailCount++;
+          if (pollFailCount >= POLL_FAIL_THRESHOLD) {
+            document.getElementById('offline-banner').classList.add('visible');
+          }
+          return;
+        }
+        pollFailCount = 0;
+        document.getElementById('offline-banner').classList.remove('visible');
+
+        const wifi = data.wifi || {};
+        const wifiInfo = WIFI_STATES[wifi.state] || { label: wifi.state || '--', color: '#888' };
+        const wifiEl = document.getElementById('wifi-state');
+        wifiEl.textContent = wifiInfo.label;
+        wifiEl.style.color = wifiInfo.color;
+        document.getElementById('wifi-ip').textContent = wifi.ip || '--';
+        document.getElementById('wifi-ssid').textContent = wifi.ssid || '--';
+
+        const ble = data.ble || {};
+        document.getElementById('ble-target').textContent = ble.target || 'Not set';
+        feedConfiguredDur = data.feed_duration || 0;
+        if (!feedCountdownTimer) {
+          renderFeedDuration();
+        }
+
+        /* Log BLE/Mesh/RAM changes */
+        if (ble.busy !== lastBleBusy) {
+          lastBleBusy = ble.busy;
+          log('BLE: ' + (ble.busy ? 'Busy' : 'Idle'));
+        }
+        if (ble.mesh_prefix && ble.mesh_prefix !== lastMesh) {
+          lastMesh = ble.mesh_prefix;
+          log('Mesh: ' + ble.mesh_prefix);
+        }
+        const freeMem = data.free_mem;
+        if (freeMem && lastFreeMem === null) {
+          lastFreeMem = freeMem;
+          log('Free RAM: ' + (freeMem / 1024).toFixed(1) + ' KB');
+        }
+
+        const mqtt = data.mqtt || {};
+        const mqttKey = mqtt.connected ? 'connected' : (mqtt.state || 'disconnected');
+        const mqttInfo = MQTT_STATES[mqttKey] || { label: mqttKey, color: '#888' };
+        const mqttEl = document.getElementById('mqtt-state');
+        mqttEl.textContent = mqttInfo.label;
+        mqttEl.style.color = mqttInfo.color;
+        /* Show/hide panels based on pump target */
+        const hasPump = ble.target && ble.target !== 'Not set';
+        const showWhenPump = hasPump ? '' : 'none';
+        document.getElementById('status-section').style.display = showWhenPump;
+        document.getElementById('actions-section').style.display = showWhenPump;
+        document.getElementById('wifi-section').style.display = showWhenPump;
+        document.getElementById('mqtt-section').style.display = showWhenPump;
+        document.getElementById('reset-section').style.display = showWhenPump;
+        document.getElementById('sync-controls').style.display = showWhenPump;
+        /* Scanner: visible always, auto-collapse on pump selection */
+        if (hasPump && !lastHasPump) {
+          document.getElementById('scanner-section').removeAttribute('open');
+        }
+        lastHasPump = hasPump;
+        if (!feedInProgress) {
+          document.getElementById('feed-btn').disabled = !hasPump;
+        }
+        if (!syncInProgress) {
+          document.getElementById('sync-btn').disabled = !hasPump;
+        }
+        /* Dynamic auto-connect label */
+        if (!autoConnectInProgress) {
+          document.getElementById('auto-connect-btn').textContent =
+            hasPump ? 'Re-connect to pumps' : 'Connect to pumps';
+        }
+
+        /* Pre-fill WiFi SSID input if empty */
+        const ssidInput = document.getElementById('wifi-ssid-input');
+        if (!ssidInput.value && wifi.ssid && wifi.ssid !== '--') {
+          ssidInput.value = wifi.ssid;
+        }
+
+        /* Auto-collapse settings on first load if already connected */
+        if (isFirstLoad) {
+          isFirstLoad = false;
+          if (wifi.state === 'connected') {
+            document.getElementById('wifi-section').removeAttribute('open');
+          }
+          if (mqtt.connected) {
+            document.getElementById('mqtt-section').removeAttribute('open');
+          }
+        }
+
+        /* Detect AP→STA transition: page served from AP but device got new IP */
+        if (wifi.state === 'connected' && wifi.ip
+            && wifi.ip !== window.location.hostname) {
+          showWifiRedirect(wifi.ip);
+        }
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* WiFi AP→STA redirect                                                */
+    /* ------------------------------------------------------------------ */
+
+    function showWifiRedirect(newIp) {
+      if (redirectShown) return;
+      redirectShown = true;
+      const url = 'http://' + newIp;
+      const section = document.getElementById('wifi-section');
+      section.setAttribute('open', '');
+      const el = document.getElementById('wifi-message');
+      el.textContent = '';
+      el.appendChild(document.createTextNode('Connected! New address: '));
+      const a = document.createElement('a');
+      a.href = url;
+      a.textContent = url;
+      a.style.fontWeight = '600';
+      el.appendChild(a);
+      el.appendChild(document.createElement('br'));
+      el.appendChild(document.createTextNode(
+        'Connect your device to the same WiFi network, then open the link above.'));
+      el.className = 'message message-ok';
+      el.style.display = 'block';
+      log('WiFi connected. New IP: ' + newIp);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Actions                                                             */
+    /* ------------------------------------------------------------------ */
+
+    function activateFeedMode() {
+      const btn = document.getElementById('feed-btn');
+      feedInProgress = true;
+      btn.disabled = true;
+      btn.textContent = 'Activating...';
+      btn.classList.add('btn-loading');
+      log('Feed Mode: sending...');
+
+      apiCall('POST', '/api/feed-mode', null, function (err, data) {
+        feedInProgress = false;
+        btn.disabled = false;
+        btn.textContent = 'Activate Feed Mode';
+        btn.classList.remove('btn-loading');
+        if (err) {
+          showMessage('feed-message', false, 'Error: ' + err.message);
+          log('Feed Mode: error');
+          return;
+        }
+        showMessage('feed-message', data.success, data.message);
+        log('Feed Mode: ' + data.message);
+        if (data.success && feedConfiguredDur > 0) {
+          startFeedCountdown();
+        }
+        refreshStatus();
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Auto-connect                                                        */
+    /* ------------------------------------------------------------------ */
+
+    function autoConnect() {
+      const btn = document.getElementById('auto-connect-btn');
+      autoConnectInProgress = true;
+      btn.disabled = true;
+
+      btn.textContent = 'Scanning...';
+      btn.classList.add('btn-loading');
+      log('Auto-connect: scanning for pumps...');
+      document.getElementById('log-section').setAttribute('open', '');
+
+      apiCall('POST', '/api/auto-connect', null, function (err) {
+        if (err) {
+          autoConnectInProgress = false;
+          btn.disabled = false;
+
+          btn.textContent = 'Connect to pumps';
+          btn.classList.remove('btn-loading');
+          showMessage('scanner-message', false, err.message);
+          log('Auto-connect: error');
+          return;
+        }
+        const pollTimer = setInterval(function () {
+          pollAutoConnect(btn, pollTimer, safetyTimer);
+        }, SCAN_POLL_MS);
+        const safetyTimer = setTimeout(function () {
+          clearInterval(pollTimer);
+          autoConnectInProgress = false;
+          btn.disabled = false;
+
+          btn.textContent = 'Connect to pumps';
+          btn.classList.remove('btn-loading');
+          showMessage('scanner-message', false, 'Auto-connect timed out');
+          log('Auto-connect: timed out');
+        }, AUTO_CONNECT_TIMEOUT_MS);
+      });
+    }
+
+    function pollAutoConnect(btn, pollTimer, safetyTimer) {
+      apiCall('GET', '/api/auto-connect-status', null, function (err, data) {
+        if (err || !data || !autoConnectInProgress)
+          return;
+        const phase = data.phase;
+        if (phase === 'scanning') {
+          btn.textContent = 'Scanning... (' + data.found + ' found)';
+        } else if (phase === 'syncing') {
+          btn.textContent = 'Reading ' + data.current + '/' + data.total + '...';
+        } else if (phase === 'done') {
+          clearInterval(pollTimer);
+          clearTimeout(safetyTimer);
+          autoConnectInProgress = false;
+          btn.disabled = false;
+
+          btn.textContent = 'Re-connect to pumps';
+          btn.classList.remove('btn-loading');
+          showMessage('scanner-message', true, 'Connected to ' + data.target);
+          log('Auto-connect: done! Target: ' + data.target);
+          refreshStatus();
+        } else if (phase === 'choose') {
+          clearInterval(pollTimer);
+          clearTimeout(safetyTimer);
+          autoConnectInProgress = false;
+          btn.disabled = false;
+
+          btn.textContent = 'Connect to pumps';
+          btn.classList.remove('btn-loading');
+          log('Auto-connect: multiple meshes — please select a pump');
+          showAutoChooseList(data.devices);
+        } else if (phase === 'error' || phase === 'idle') {
+          clearInterval(pollTimer);
+          clearTimeout(safetyTimer);
+          autoConnectInProgress = false;
+          btn.disabled = false;
+
+          btn.textContent = 'Connect to pumps';
+          btn.classList.remove('btn-loading');
+          const msg = data.error || 'BLE busy, try again';
+          showMessage('scanner-message', false, msg);
+          log('Auto-connect: ' + msg);
+        }
+      });
+    }
+
+    function showAutoChooseList(devices) {
+      scannedDevices = devices;
+      const section = document.getElementById('scanner-section');
+      section.setAttribute('open', '');
+      const list = document.getElementById('device-list');
+      list.innerHTML = '';
+      selectedAddress = null;
+      for (let i = 0; i < devices.length; i++) {
+        const device = devices[i];
+        const li = document.createElement('li');
+        const left = document.createElement('span');
+        const meshLabel = device.mesh_prefix
+          ? ' [mesh:' + device.mesh_prefix.substring(0, 8) + ']' : '';
+        left.textContent = device.name + ' (' + device.address + ')' + meshLabel;
+        const right = document.createElement('span');
+        right.textContent = device.rssi + ' dBm';
+        li.appendChild(left);
+        li.appendChild(right);
+        li.onclick = function () {
+          const items = list.getElementsByTagName('li');
+          for (let j = 0; j < items.length; j++) items[j].className = '';
+          li.className = 'selected';
+          selectedAddress = device.address;
+          selectedAddrType = device.addr_type || 1;
+          document.getElementById('connect-btn').style.display = 'block';
+        };
+        list.appendChild(li);
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Sync Settings                                                       */
+    /* ------------------------------------------------------------------ */
+
+    function syncSettings() {
+      const btn = document.getElementById('sync-btn');
+      syncInProgress = true;
+      btn.disabled = true;
+      btn.classList.add('btn-loading');
+      btn.textContent = 'Scanning...';
+      log('Sync: scanning for pumps...');
+      document.getElementById('log-section').setAttribute('open', '');
+
+      apiCall('POST', '/api/sync-settings', null, function (err) {
+        if (err) {
+          syncInProgress = false;
+          btn.disabled = false;
+          btn.textContent = 'Sync Settings';
+          btn.classList.remove('btn-loading');
+          showMessage('sync-message', false, err.message);
+          log('Sync: ' + err.message);
+          return;
+        }
+        const pollTimer = setInterval(function () {
+          pollSync(btn, pollTimer, safetyTimer);
+        }, SCAN_POLL_MS);
+        const safetyTimer = setTimeout(function () {
+          clearInterval(pollTimer);
+          syncInProgress = false;
+          btn.disabled = false;
+          btn.textContent = 'Sync Settings';
+          btn.classList.remove('btn-loading');
+          showMessage('sync-message', false, 'Sync timed out');
+          log('Sync: timed out');
+        }, AUTO_CONNECT_TIMEOUT_MS);
+      });
+    }
+
+    function pollSync(btn, pollTimer, safetyTimer) {
+      apiCall('GET', '/api/sync-status', null, function (err, data) {
+        if (err || !data || !syncInProgress) return;
+        const phase = data.phase;
+        if (phase === 'scanning') {
+          btn.textContent = 'Scanning... (' + data.found + ' found)';
+        } else if (phase === 'syncing') {
+          btn.textContent = 'Reading ' + data.current + '/' + data.total + '...';
+        } else if (phase === 'done') {
+          clearInterval(pollTimer);
+          clearTimeout(safetyTimer);
+          syncInProgress = false;
+          btn.disabled = false;
+          btn.textContent = 'Sync Settings';
+          btn.classList.remove('btn-loading');
+          showMessage('sync-message', true, 'Synced ' + data.synced + ' pump(s)');
+          log('Sync complete: ' + data.synced + ' pump(s)');
+          logSyncResults(data.results || []);
+        } else if (phase === 'error' || phase === 'idle') {
+          clearInterval(pollTimer);
+          clearTimeout(safetyTimer);
+          syncInProgress = false;
+          btn.disabled = false;
+          btn.textContent = 'Sync Settings';
+          btn.classList.remove('btn-loading');
+          const msg = data.error || 'Sync failed';
+          showMessage('sync-message', false, msg);
+          log('Sync: ' + msg);
+        }
+      });
+    }
+
+    function logSyncResults(results) {
+      for (let r = 0; r < results.length; r++) {
+        try {
+          const scenes = JSON.parse(results[r].scenes_json);
+          for (let s = 0; s < scenes.length; s++) {
+            const sc = scenes[s];
+            const label = sc.id === 1 ? 'Feed Mode' : 'Scene ' + sc.id;
+            const pct = Math.round(sc.speed / 10);
+            const mins = Math.floor(sc.timeout / 60);
+            const secs = sc.timeout % 60;
+            log(results[r].name + ' > ' + label + ': '
+                + pct + '%, ' + mins + 'm' + secs + 's');
+          }
+        } catch (e) {
+          log(results[r].name + ': parse error');
+        }
+      }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Connect to pump                                                     */
+    /* ------------------------------------------------------------------ */
+
+    function setTarget() {
+      if (!selectedAddress) return;
+      log('Setting target: ' + selectedAddress);
+
+      apiCall('POST', '/api/connect',
+        { address: selectedAddress, addr_type: selectedAddrType },
+        function (err) {
+          if (err) {
+            log('Error: ' + err.message);
+            return;
+          }
+          log('Target set: ' + selectedAddress);
+          document.getElementById('scanner-section').removeAttribute('open');
+          refreshStatus();
+        }
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* WiFi settings                                                       */
+    /* ------------------------------------------------------------------ */
+
+    function saveWifi() {
+      const ssid = document.getElementById('wifi-ssid-input').value;
+      const password = document.getElementById('wifi-pass-input').value;
+
+      if (!ssid) {
+        showMessage('wifi-message', false, 'SSID required');
+        return;
+      }
+
+      log('Saving WiFi: ' + ssid);
+      apiCall('POST', '/api/wifi', { ssid: ssid, password: password },
+        function (err) {
+          if (err) {
+            showMessage('wifi-message', false, 'Error');
+            return;
+          }
+          showMessage('wifi-message', true, 'Saved. Connecting...');
+          log('WiFi saved, reconnecting...');
+        }
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* MQTT settings                                                       */
+    /* ------------------------------------------------------------------ */
+
+    function saveMqtt() {
+      const broker = document.getElementById('mqtt-broker-input').value;
+      if (!broker) {
+        showMessage('mqtt-message', false, 'Broker required');
+        return;
+      }
+
+      const params = {
+        broker: broker,
+        port: parseInt(document.getElementById('mqtt-port-input').value) || 1883,
+        user: document.getElementById('mqtt-user-input').value,
+        password: document.getElementById('mqtt-pass-input').value
+      };
+
+      log('Saving MQTT: ' + broker);
+      apiCall('POST', '/api/mqtt', params, function (err) {
+        if (err) {
+          showMessage('mqtt-message', false, 'Error');
+          return;
+        }
+        showMessage('mqtt-message', true, 'Saved. Connecting...');
+        log('MQTT saved, connecting...');
+      });
+    }
+
+    function loadMqttSettings() {
+      apiCall('GET', '/api/mqtt', null, function (err, data) {
+        if (err || !data) return;
+        document.getElementById('mqtt-broker-input').value = data.broker || '';
+        document.getElementById('mqtt-port-input').value = data.port || 1883;
+        document.getElementById('mqtt-user-input').value = data.user || '';
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Factory Reset                                                       */
+    /* ------------------------------------------------------------------ */
+
+    function factoryReset() {
+      if (!confirm('FACTORY RESET\n\nThis will erase ALL settings:\n'
+          + '- WiFi credentials\n- MQTT configuration\n- Pump selection\n\n'
+          + 'The device will reboot to defaults.\n\nAre you sure?')) {
+        return;
+      }
+      log('Factory reset requested...');
+      apiCall('POST', '/api/factory-reset', {token: RESET_TOKEN},
+        function (err, data) {
+          if (err) {
+            showMessage('reset-message', false, 'Error: ' + err.message);
+            return;
+          }
+          showMessage('reset-message', true,
+            'Resetting... Device will reboot.');
+          log('Factory reset initiated. Device rebooting...');
+        }
+      );
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Init                                                                */
+    /* ------------------------------------------------------------------ */
+
+    refreshStatus();
+    loadMqttSettings();
+    setInterval(refreshStatus, STATUS_POLL_MS);
+  </script>
+</body>
+</html>

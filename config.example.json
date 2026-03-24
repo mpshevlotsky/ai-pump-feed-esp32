@@ -1,0 +1,15 @@
+{
+    "wifi": {
+        "ssid": "",
+        "password": ""
+    },
+    "mqtt": {
+        "broker": "",
+        "port": 1883,
+        "user": "",
+        "password": ""
+    },
+    "pump": {
+        "address": ""
+    }
+}

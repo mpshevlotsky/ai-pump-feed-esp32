@@ -1,0 +1,584 @@
+openapi: 3.0.3
+info:
+  title: AI Pump Bridge API
+  description: REST API for ESP32-S3 aquarium pump bridge controller.
+  version: 1.0.0
+
+paths:
+  /api/status:
+    get:
+      summary: Get system status
+      description: Returns current WiFi, BLE, and MQTT connection status.
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wifi:
+                    type: object
+                    properties:
+                      state:
+                        type: string
+                        enum: [disconnected, connecting, connected, ap_active, error]
+                      ip:
+                        type: string
+                        example: "192.168.1.42"
+                      ssid:
+                        type: string
+                      rssi:
+                        type: integer
+                        example: -55
+                  ble:
+                    type: object
+                    properties:
+                      target:
+                        type: string
+                        nullable: true
+                        example: "AA:BB:CC:DD:EE:FF"
+                      busy:
+                        type: boolean
+                      mesh_prefix:
+                        type: string
+                        nullable: true
+                        description: Hex-encoded Thread mesh prefix
+                        example: "fdb5ea180468baec"
+                  mqtt:
+                    type: object
+                    properties:
+                      state:
+                        type: string
+                      connected:
+                        type: boolean
+                  feed_duration:
+                    type: integer
+                    description: Remaining feed mode duration in seconds (0 if inactive)
+                    example: 0
+                  free_mem:
+                    type: integer
+                    description: Free RAM in bytes
+                    example: 131072
+
+  /api/devices:
+    get:
+      summary: Get scanned BLE devices
+      description: Returns list of BLE devices found during the last scan.
+      responses:
+        '200':
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          example: "AI-PRIME-HD"
+                        address:
+                          type: string
+                          example: "AA:BB:CC:DD:EE:FF"
+                        addr_type:
+                          type: integer
+                          example: 1
+                        rssi:
+                          type: integer
+                          example: -62
+
+  /api/auto-connect:
+    post:
+      summary: Start auto-connect flow
+      description: >
+        Scans for pumps, handshakes each to learn mesh prefix, then
+        auto-selects target if all pumps share the same mesh.
+        Poll GET /api/auto-connect-status for progress.
+      responses:
+        '202':
+          description: Auto-connect started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: started
+        '400':
+          description: BLE is busy with another operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: BLE not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auto-connect-status:
+    get:
+      summary: Get auto-connect progress
+      description: >
+        Returns current phase and progress of the auto-connect flow.
+      responses:
+        '200':
+          description: Auto-connect progress
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [phase]
+                properties:
+                  phase:
+                    type: string
+                    enum: [idle, scanning, syncing, done, choose, error]
+                  found:
+                    type: integer
+                    description: Number of pumps found during scan
+                  current:
+                    type: integer
+                    description: Current device being processed (connecting/syncing)
+                  total:
+                    type: integer
+                    description: Total devices to process
+                  device_name:
+                    type: string
+                    description: Name of current device being processed
+                  target:
+                    type: string
+                    description: Auto-selected target address (phase=done)
+                  devices:
+                    type: array
+                    description: Device list with mesh info (phase=choose)
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        address:
+                          type: string
+                        addr_type:
+                          type: integer
+                        rssi:
+                          type: integer
+                        mesh_prefix:
+                          type: string
+                          nullable: true
+                  error:
+                    type: string
+                    description: Error message (phase=error)
+
+  /api/sync-settings:
+    post:
+      summary: Start settings sync flow
+      description: >
+        Scans for all pumps on the mesh network and reads scene settings
+        from each. Poll GET /api/sync-status for progress.
+      responses:
+        '202':
+          description: Sync started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: started
+        '400':
+          description: BLE is busy with another operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: BLE not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/sync-status:
+    get:
+      summary: Get sync progress
+      description: Returns current phase and progress of the settings sync flow.
+      responses:
+        '200':
+          description: Sync progress
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [phase]
+                properties:
+                  phase:
+                    type: string
+                    enum: [idle, scanning, syncing, done, error]
+                  found:
+                    type: integer
+                    description: Number of pumps found during scan
+                  current:
+                    type: integer
+                    description: Current device being processed
+                  total:
+                    type: integer
+                    description: Total devices to process
+                  device_name:
+                    type: string
+                    description: Name of current device being processed
+                  synced:
+                    type: integer
+                    description: Number of pumps synced (phase=done)
+                  results:
+                    type: array
+                    description: Per-pump sync results (phase=done)
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        address:
+                          type: string
+                        scenes_json:
+                          type: string
+                          description: JSON-encoded array of scene objects
+                  error:
+                    type: string
+                    description: Error message (phase=error)
+
+  /api/scan:
+    post:
+      summary: Start BLE scan
+      description: >
+        Initiates a BLE scan for nearby pump devices.
+        Results are available via GET /api/devices after approximately 12 seconds.
+      responses:
+        '202':
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: scanning
+        '400':
+          description: BLE is busy with another operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: BLE not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/connect:
+    post:
+      summary: Set target pump
+      description: Set the BLE address of the target pump device.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  type: string
+                  description: BLE MAC address
+                  example: "AA:BB:CC:DD:EE:FF"
+                addr_type:
+                  type: integer
+                  description: "BLE address type (0: public, 1: random)"
+                  default: 1
+      responses:
+        '200':
+          description: Target set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  address:
+                    type: string
+        '400':
+          description: Missing address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/feed-mode:
+    post:
+      summary: Activate Feed Mode
+      description: Send the Feed Mode command to the target pump via BLE.
+      responses:
+        '200':
+          description: Feed mode result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: "Feed mode activated"
+        '500':
+          description: BLE not available or operation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/read-settings:
+    post:
+      summary: Read pump settings
+      description: Read scene configuration from the target pump via BLE.
+      responses:
+        '200':
+          description: Settings read successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: BLE not available or operation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/read-remote-scenes:
+    post:
+      summary: Read scenes from a specific pump
+      description: >
+        Read scene configuration from a pump specified by BLE address.
+        Used to read settings from all discovered pumps.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  type: string
+                  description: BLE MAC address of the pump
+                  example: "AA:BB:CC:DD:EE:FF"
+                addr_type:
+                  type: integer
+                  description: "BLE address type (0: public, 1: random)"
+                  default: 1
+      responses:
+        '200':
+          description: Scenes read successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  scenes_json:
+                    type: string
+                    description: JSON-encoded array of scene objects (only on success)
+        '400':
+          description: Missing address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: BLE not available or operation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/wifi:
+    get:
+      summary: Get WiFi status
+      description: Returns current WiFi connection status and configuration.
+      responses:
+        '200':
+          description: WiFi status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+                    enum: [disconnected, connecting, connected, ap_active, error]
+                  ip:
+                    type: string
+                  ssid:
+                    type: string
+                  rssi:
+                    type: integer
+    post:
+      summary: Set WiFi credentials
+      description: Save WiFi credentials and initiate connection.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ssid]
+              properties:
+                ssid:
+                  type: string
+                password:
+                  type: string
+                  default: ""
+      responses:
+        '200':
+          description: Credentials saved, connecting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  ssid:
+                    type: string
+        '400':
+          description: Missing SSID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/mqtt:
+    get:
+      summary: Get MQTT settings
+      description: Returns current MQTT broker configuration and connection state.
+      responses:
+        '200':
+          description: MQTT settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  broker:
+                    type: string
+                  port:
+                    type: integer
+                    example: 1883
+                  user:
+                    type: string
+                  configured:
+                    type: boolean
+                  connected:
+                    type: boolean
+    post:
+      summary: Set MQTT settings
+      description: Save MQTT broker settings and initiate connection.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [broker]
+              properties:
+                broker:
+                  type: string
+                  example: "192.168.1.100"
+                port:
+                  type: integer
+                  default: 1883
+                user:
+                  type: string
+                  default: ""
+                password:
+                  type: string
+                  default: ""
+      responses:
+        '200':
+          description: Settings saved, connecting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        '400':
+          description: Missing broker
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/factory-reset:
+    post:
+      summary: Factory reset
+      description: Erase all settings (WiFi, MQTT, pump) and reboot to defaults.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Reset token embedded in the UI page
+      responses:
+        '200':
+          description: Reset initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: resetting
+        '403':
+          description: Invalid reset token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Error description"
