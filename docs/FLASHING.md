@@ -34,6 +34,11 @@ sudo apt update && sudo apt install python3 python3-pip python3-venv
 
 ## Step 2: Download the Project
 
+Go to https://github.com/mpshevlotsky/ai-pump-feed-esp32 and click
+**Code → Download ZIP**. Extract the archive and open the resulting folder.
+
+Alternatively, you can use Git:
+
 ```bash
 git clone https://github.com/mpshevlotsky/ai-pump-feed-esp32.git
 cd ai-pump-feed-esp32

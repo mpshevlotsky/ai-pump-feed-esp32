@@ -15,7 +15,7 @@ set "FIRMWARE_FILE=ESP32_GENERIC_S3-%FIRMWARE_VERSION%.bin"
 set "FIRMWARE_URL=https://micropython.org/resources/firmware/%FIRMWARE_FILE%"
 
 echo.
-echo === AI Pump Bridge — Firmware Flasher ===
+echo === AI Pump Bridge - Firmware Flasher ===
 echo.
 
 :: ── Find Python ─────────────────────────────────────────────────────────
@@ -53,8 +53,8 @@ if %errorlevel% neq 0 (
     echo.
     echo MicroPython firmware not found in tools\.
     echo Downloading %FIRMWARE_FILE% ...
-    powershell -Command "Invoke-WebRequest -Uri '%FIRMWARE_URL%' -OutFile '%TOOLS_DIR%\%FIRMWARE_FILE%'"
-    if %errorlevel% neq 0 (
+    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%FIRMWARE_URL%' -OutFile '%TOOLS_DIR%\%FIRMWARE_FILE%'" 2>nul
+    if not exist "%TOOLS_DIR%\%FIRMWARE_FILE%" (
         echo.
         echo ERROR: Download failed.
         echo Download manually from:

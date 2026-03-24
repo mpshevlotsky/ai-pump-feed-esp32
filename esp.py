@@ -137,7 +137,7 @@ def confirm(actions: list, port: str, file_count: int) -> bool:
 
 def esptool_cmd(port: str, *args: str) -> list:
     """Build esptool command. Port passed only if explicitly set."""
-    cmd = ["esptool.py"]
+    cmd = [sys.executable, "-m", "esptool"]
     if port:
         cmd.extend(["--port", port])
     cmd.extend(args)
@@ -146,7 +146,7 @@ def esptool_cmd(port: str, *args: str) -> list:
 
 def mpremote_cmd(port: str, *args: str) -> list:
     """Build mpremote command. Port passed only if explicitly set."""
-    cmd = ["mpremote"]
+    cmd = [sys.executable, "-m", "mpremote"]
     if port:
         cmd.extend(["connect", port])
     cmd.extend(args)
@@ -163,25 +163,32 @@ def action_flash(port: str) -> bool:
     print("\nFlashing: %s" % os.path.basename(firmware_bin))
 
     if not run(
-        esptool_cmd(port, "erase_flash"),
+        esptool_cmd(port, "erase-flash"),
         "Erasing flash...",
     ):
         return False
 
     if not run(
-        esptool_cmd(port, "write_flash", "0", firmware_bin),
+        esptool_cmd(port, "write-flash", "0", firmware_bin),
         "Writing firmware...",
     ):
         return False
 
     print("Flash complete. Waiting for board to boot...")
-    time.sleep(5)
+    time.sleep(8)
     return True
 
 
 def action_install_libs(port: str) -> bool:
     """Install MicroPython libraries via mip."""
     print("\nInstalling libraries...")
+    # Soft-reset the board first so mpremote can enter raw REPL cleanly
+    subprocess.run(
+        mpremote_cmd(port, "soft-reset"),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    time.sleep(3)
     for lib in MIP_LIBS:
         if not run(mpremote_cmd(port, "mip", "install", lib), "mip install %s" % lib):
             return False
